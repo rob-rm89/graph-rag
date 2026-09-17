@@ -1,0 +1,586 @@
+{
+  "nodes": [
+    {
+      "id": "1192b2893396a786",
+      "type": "text",
+      "x": 4380,
+      "y": 2200,
+      "width": 400,
+      "height": 276,
+      "text": "# 2024\n\n**Type:** year\n\nPublication year of 'Sparse Attention Routing for Long-Document Retrieval-Augmented Generation'. Publication year of the paper.\n\n_Source: sample_paper.md_",
+      "color": "3"
+    },
+    {
+      "id": "6424e7fcab7e6846",
+      "type": "text",
+      "x": 3340,
+      "y": 1940,
+      "width": 400,
+      "height": 300,
+      "text": "# Attention Is All You Need\n\n**Type:** citedwork\n\nWork cited by 'Sparse Attention Routing for Long-Document Retrieval-Augmented Generation'. Vaswani et al. (2017); introduced the Transformer.\n\n_Source: sample_paper.md_",
+      "color": "1"
+    },
+    {
+      "id": "4abf372c65a33792",
+      "type": "text",
+      "x": 1240,
+      "y": 700,
+      "width": 400,
+      "height": 252,
+      "text": "# Dual-Level Retrieval\n\n**Type:** method\n\nRetrieval scheme pairing low-level entity lookup with high-level thematic aggregation.\n\n_Source: sample_paper.md_",
+      "color": "2"
+    },
+    {
+      "id": "1ab1eb2c5ec91a02",
+      "type": "text",
+      "x": 4360,
+      "y": 1820,
+      "width": 400,
+      "height": 300,
+      "text": "# EMNLP 2024\n\n**Type:** venue\n\nPublication venue of 'Sparse Attention Routing for Long-Document Retrieval-Augmented Generation'. Conference on Empirical Methods in NLP, 2024 edition.\n\n_Source: sample_paper.md_",
+      "color": "5"
+    },
+    {
+      "id": "532e07700bd9b50e",
+      "type": "text",
+      "x": 4600,
+      "y": 1440,
+      "width": 400,
+      "height": 300,
+      "text": "# Elena Marchetti\n\n**Type:** author\n\nAuthor of 'Sparse Attention Routing for Long-Document Retrieval-Augmented Generation'. First author, affiliated with Politecnico di Torino.\n\n_Source: sample_paper.md_",
+      "color": "4"
+    },
+    {
+      "id": "7e28f3aca9fe098f",
+      "type": "text",
+      "x": 2540,
+      "y": 660,
+      "width": 400,
+      "height": 252,
+      "text": "# Exact Match\n\n**Type:** metric\n\nWhether a generated answer matches a gold answer.\n\n_Source: sample_paper.md_",
+      "color": "2"
+    },
+    {
+      "id": "d24a507ca15718ab",
+      "type": "text",
+      "x": 3780,
+      "y": 800,
+      "width": 400,
+      "height": 324,
+      "text": "# From Local to Global: A Graph RAG Approach to Query-Focused Summarization\n\n**Type:** citedwork\n\nWork cited by 'Sparse Attention Routing for Long-Document Retrieval-Augmented Generation'. Edge et al. (2024); graph community summaries for global questions.\n\n_Source: sample_paper.md_",
+      "color": "1"
+    },
+    {
+      "id": "9e2943b3b745187b",
+      "type": "text",
+      "x": 0,
+      "y": 0,
+      "width": 400,
+      "height": 252,
+      "text": "# GraphRAG\n\n**Type:** method\n\nGraph RAG system built on community summaries.\n\n_Source: sample_paper.md_",
+      "color": "2"
+    },
+    {
+      "id": "36fe0996d71e8512",
+      "type": "text",
+      "x": 5020,
+      "y": 940,
+      "width": 400,
+      "height": 300,
+      "text": "# KTH Royal Institute of Technology\n\n**Type:** organization\n\nInstitution affiliated with 'Sparse Attention Routing for Long-Document Retrieval-Augmented Generation'. Swedish technical university.\n\n_Source: sample_paper.md_",
+      "color": "2"
+    },
+    {
+      "id": "f291bc520f554ee0",
+      "type": "text",
+      "x": 520,
+      "y": 280,
+      "width": 400,
+      "height": 252,
+      "text": "# Knowledge Graph\n\n**Type:** concept\n\nGraph of extracted entities and relations used for structured retrieval.\n\n_Source: sample_paper.md_",
+      "color": "2"
+    },
+    {
+      "id": "8f6a305d2eda9b64",
+      "type": "text",
+      "x": 4520,
+      "y": 1040,
+      "width": 400,
+      "height": 300,
+      "text": "# Kwame Mensah\n\n**Type:** author\n\nAuthor of 'Sparse Attention Routing for Long-Document Retrieval-Augmented Generation'. Second author, affiliated with the University of Ghana.\n\n_Source: sample_paper.md_",
+      "color": "4"
+    },
+    {
+      "id": "f3119c7df5f6b27c",
+      "type": "text",
+      "x": 640,
+      "y": 780,
+      "width": 400,
+      "height": 252,
+      "text": "# LightRAG\n\n**Type:** method\n\nGraph-based RAG system with dual-level retrieval.\n\n_Source: sample_paper.md_",
+      "color": "2"
+    },
+    {
+      "id": "5dd64acfa3363b0f",
+      "type": "text",
+      "x": 3860,
+      "y": 2020,
+      "width": 400,
+      "height": 324,
+      "text": "# LightRAG: Simple and Fast Retrieval-Augmented Generation\n\n**Type:** citedwork\n\nWork cited by 'Sparse Attention Routing for Long-Document Retrieval-Augmented Generation'. Guo et al. (2024); introduced dual-level retrieval.\n\n_Source: sample_paper.md_",
+      "color": "1"
+    },
+    {
+      "id": "9aa334c2613e592e",
+      "type": "text",
+      "x": 2220,
+      "y": 320,
+      "width": 400,
+      "height": 252,
+      "text": "# Long-Document Understanding\n\n**Type:** concept\n\nResearch problem of reasoning over documents exceeding the context window.\n\n_Source: sample_paper.md_",
+      "color": "2"
+    },
+    {
+      "id": "f89e4b0ae413d00b",
+      "type": "text",
+      "x": 1780,
+      "y": 1020,
+      "width": 400,
+      "height": 252,
+      "text": "# LongBench\n\n**Type:** dataset\n\nMulti-task benchmark for long-context understanding.\n\n_Source: sample_paper.md_",
+      "color": "2"
+    },
+    {
+      "id": "bd63854df05cf848",
+      "type": "text",
+      "x": 1760,
+      "y": 1360,
+      "width": 400,
+      "height": 252,
+      "text": "# NarrativeQA\n\n**Type:** dataset\n\nQuestion answering over books and film scripts.\n\n_Source: sample_paper.md_",
+      "color": "2"
+    },
+    {
+      "id": "b4b8cd57155d62a9",
+      "type": "text",
+      "x": 5100,
+      "y": 1320,
+      "width": 400,
+      "height": 300,
+      "text": "# Politecnico di Torino\n\n**Type:** organization\n\nInstitution affiliated with 'Sparse Attention Routing for Long-Document Retrieval-Augmented Generation'. Italian technical university.\n\n_Source: sample_paper.md_",
+      "color": "2"
+    },
+    {
+      "id": "b5e30b44a64a739a",
+      "type": "text",
+      "x": 2420,
+      "y": 1600,
+      "width": 400,
+      "height": 228,
+      "text": "# ROUGE-L\n\n**Type:** metric\n\nLongest-common-subsequence overlap metric.\n\n_Source: sample_paper.md_",
+      "color": "2"
+    },
+    {
+      "id": "36fce29d8ceba239",
+      "type": "text",
+      "x": 1920,
+      "y": 680,
+      "width": 400,
+      "height": 252,
+      "text": "# Retrieval-Augmented Generation\n\n**Type:** concept\n\nParadigm that retrieves evidence before generating an answer.\n\n_Source: sample_paper.md_",
+      "color": "2"
+    },
+    {
+      "id": "65a3b459bd7d64c7",
+      "type": "text",
+      "x": 3280,
+      "y": 1540,
+      "width": 400,
+      "height": 324,
+      "text": "# Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks\n\n**Type:** citedwork\n\nWork cited by 'Sparse Attention Routing for Long-Document Retrieval-Augmented Generation'. Lewis et al. (2020); established retrieve-then-generate.\n\n_Source: sample_paper.md_",
+      "color": "1"
+    },
+    {
+      "id": "d7c3548334ad43d8",
+      "type": "text",
+      "x": 4440,
+      "y": 660,
+      "width": 400,
+      "height": 300,
+      "text": "# Sofia Lindqvist\n\n**Type:** author\n\nAuthor of 'Sparse Attention Routing for Long-Document Retrieval-Augmented Generation'. Third author, affiliated with KTH Royal Institute of Technology.\n\n_Source: sample_paper.md_",
+      "color": "4"
+    },
+    {
+      "id": "df9ea413696c9cf2",
+      "type": "text",
+      "x": 2320,
+      "y": 1060,
+      "width": 400,
+      "height": 276,
+      "text": "# Sparse Attention Routing\n\n**Type:** method\n\nMethod that learns a sparse routing distribution over document regions before budgeted decoder attention.\n\n_Source: sample_paper.md_",
+      "color": "2"
+    },
+    {
+      "id": "dd5750b075c2f947",
+      "type": "text",
+      "x": 3800,
+      "y": 1320,
+      "width": 400,
+      "height": 348,
+      "text": "# Sparse Attention Routing for Long-Document Retrieval-Augmented Generation\n\n**Type:** paper\n\nAcademic paper titled 'Sparse Attention Routing for Long-Document Retrieval-Augmented Generation', published in EMNLP 2024 (2024). Paper proposing Sparse Attention Routing for long-document RAG, published at EMNLP 2024.\n\n_Source: sample_paper.md_",
+      "color": "6"
+    },
+    {
+      "id": "5fa4ad5005e081f4",
+      "type": "text",
+      "x": 1920,
+      "y": 1700,
+      "width": 400,
+      "height": 252,
+      "text": "# Transformer\n\n**Type:** method\n\nAttention-based neural sequence architecture.\n\n_Source: sample_paper.md_",
+      "color": "2"
+    },
+    {
+      "id": "2508683b973b18c2",
+      "type": "text",
+      "x": 4940,
+      "y": 540,
+      "width": 400,
+      "height": 300,
+      "text": "# University of Ghana\n\n**Type:** organization\n\nInstitution affiliated with 'Sparse Attention Routing for Long-Document Retrieval-Augmented Generation'. Public university in Accra, Ghana.\n\n_Source: sample_paper.md_",
+      "color": "2"
+    }
+  ],
+  "edges": [
+    {
+      "id": "85850b2d6c2a2b75",
+      "fromNode": "4abf372c65a33792",
+      "fromSide": "left",
+      "fromEnd": "none",
+      "toNode": "f291bc520f554ee0",
+      "toSide": "right",
+      "toEnd": "arrow",
+      "color": "2",
+      "label": "entities,indexes"
+    },
+    {
+      "id": "c8720b49253ffc07",
+      "fromNode": "4abf372c65a33792",
+      "fromSide": "left",
+      "fromEnd": "none",
+      "toNode": "f3119c7df5f6b27c",
+      "toSide": "right",
+      "toEnd": "arrow",
+      "color": "2",
+      "label": "introduces"
+    },
+    {
+      "id": "f1ead6eed9dfd6fa",
+      "fromNode": "532e07700bd9b50e",
+      "fromSide": "top",
+      "fromEnd": "none",
+      "toNode": "36fe0996d71e8512",
+      "toSide": "bottom",
+      "toEnd": "arrow",
+      "color": "4",
+      "label": "affiliated_with"
+    },
+    {
+      "id": "3288b47fba48b523",
+      "fromNode": "532e07700bd9b50e",
+      "fromSide": "right",
+      "fromEnd": "none",
+      "toNode": "b4b8cd57155d62a9",
+      "toSide": "left",
+      "toEnd": "arrow",
+      "color": "4",
+      "label": "affiliated_with"
+    },
+    {
+      "id": "167bd5c087175b70",
+      "fromNode": "532e07700bd9b50e",
+      "fromSide": "top",
+      "fromEnd": "none",
+      "toNode": "2508683b973b18c2",
+      "toSide": "bottom",
+      "toEnd": "arrow",
+      "color": "4",
+      "label": "affiliated_with"
+    },
+    {
+      "id": "652c2db50303cd1e",
+      "fromNode": "f291bc520f554ee0",
+      "fromSide": "left",
+      "fromEnd": "none",
+      "toNode": "9e2943b3b745187b",
+      "toSide": "right",
+      "toEnd": "arrow",
+      "color": "2",
+      "label": "builds on"
+    },
+    {
+      "id": "d5301a12ac450588",
+      "fromNode": "8f6a305d2eda9b64",
+      "fromSide": "right",
+      "fromEnd": "none",
+      "toNode": "36fe0996d71e8512",
+      "toSide": "left",
+      "toEnd": "arrow",
+      "color": "4",
+      "label": "affiliated_with"
+    },
+    {
+      "id": "adc06c74c441cfd3",
+      "fromNode": "8f6a305d2eda9b64",
+      "fromSide": "right",
+      "fromEnd": "none",
+      "toNode": "b4b8cd57155d62a9",
+      "toSide": "left",
+      "toEnd": "arrow",
+      "color": "4",
+      "label": "affiliated_with"
+    },
+    {
+      "id": "b5a14248003fb188",
+      "fromNode": "8f6a305d2eda9b64",
+      "fromSide": "top",
+      "fromEnd": "none",
+      "toNode": "2508683b973b18c2",
+      "toSide": "bottom",
+      "toEnd": "arrow",
+      "color": "4",
+      "label": "affiliated_with"
+    },
+    {
+      "id": "22f374438add6d38",
+      "fromNode": "d7c3548334ad43d8",
+      "fromSide": "right",
+      "fromEnd": "none",
+      "toNode": "36fe0996d71e8512",
+      "toSide": "left",
+      "toEnd": "arrow",
+      "color": "4",
+      "label": "affiliated_with"
+    },
+    {
+      "id": "21f657632f76af25",
+      "fromNode": "d7c3548334ad43d8",
+      "fromSide": "right",
+      "fromEnd": "none",
+      "toNode": "b4b8cd57155d62a9",
+      "toSide": "left",
+      "toEnd": "arrow",
+      "color": "4",
+      "label": "affiliated_with"
+    },
+    {
+      "id": "24688444f28fd5c0",
+      "fromNode": "d7c3548334ad43d8",
+      "fromSide": "right",
+      "fromEnd": "none",
+      "toNode": "2508683b973b18c2",
+      "toSide": "left",
+      "toEnd": "arrow",
+      "color": "4",
+      "label": "affiliated_with"
+    },
+    {
+      "id": "4338144eb8bfd4fd",
+      "fromNode": "df9ea413696c9cf2",
+      "fromSide": "left",
+      "fromEnd": "none",
+      "toNode": "4abf372c65a33792",
+      "toSide": "right",
+      "toEnd": "arrow",
+      "color": "2",
+      "label": "combines,retrieval"
+    },
+    {
+      "id": "39d2f4471047bf15",
+      "fromNode": "df9ea413696c9cf2",
+      "fromSide": "top",
+      "fromEnd": "none",
+      "toNode": "7e28f3aca9fe098f",
+      "toSide": "bottom",
+      "toEnd": "arrow",
+      "color": "2",
+      "label": "improves,metric"
+    },
+    {
+      "id": "893712f8fe80bbc4",
+      "fromNode": "df9ea413696c9cf2",
+      "fromSide": "top",
+      "fromEnd": "none",
+      "toNode": "9aa334c2613e592e",
+      "toSide": "bottom",
+      "toEnd": "arrow",
+      "color": "2",
+      "label": "addresses,problem"
+    },
+    {
+      "id": "aca4783a43f05ca7",
+      "fromNode": "df9ea413696c9cf2",
+      "fromSide": "left",
+      "fromEnd": "none",
+      "toNode": "f89e4b0ae413d00b",
+      "toSide": "right",
+      "toEnd": "arrow",
+      "color": "2",
+      "label": "dataset,evaluated on"
+    },
+    {
+      "id": "07f480b15c528fc7",
+      "fromNode": "df9ea413696c9cf2",
+      "fromSide": "left",
+      "fromEnd": "none",
+      "toNode": "bd63854df05cf848",
+      "toSide": "right",
+      "toEnd": "arrow",
+      "color": "2",
+      "label": "dataset,evaluated on"
+    },
+    {
+      "id": "51da18913953dc66",
+      "fromNode": "df9ea413696c9cf2",
+      "fromSide": "bottom",
+      "fromEnd": "none",
+      "toNode": "b5e30b44a64a739a",
+      "toSide": "top",
+      "toEnd": "arrow",
+      "color": "2",
+      "label": "improves,metric"
+    },
+    {
+      "id": "cc7383a026f5bb84",
+      "fromNode": "df9ea413696c9cf2",
+      "fromSide": "left",
+      "fromEnd": "none",
+      "toNode": "36fce29d8ceba239",
+      "toSide": "right",
+      "toEnd": "arrow",
+      "color": "2",
+      "label": "improves,paradigm"
+    },
+    {
+      "id": "f3e53fec5dda5bd0",
+      "fromNode": "df9ea413696c9cf2",
+      "fromSide": "bottom",
+      "fromEnd": "none",
+      "toNode": "5fa4ad5005e081f4",
+      "toSide": "top",
+      "toEnd": "arrow",
+      "color": "2",
+      "label": "decoder,uses"
+    },
+    {
+      "id": "85b100c98b94518a",
+      "fromNode": "dd5750b075c2f947",
+      "fromSide": "bottom",
+      "fromEnd": "none",
+      "toNode": "1192b2893396a786",
+      "toSide": "top",
+      "toEnd": "arrow",
+      "color": "4",
+      "label": "published_year"
+    },
+    {
+      "id": "1eb6006d4ac60a15",
+      "fromNode": "dd5750b075c2f947",
+      "fromSide": "bottom",
+      "fromEnd": "none",
+      "toNode": "6424e7fcab7e6846",
+      "toSide": "top",
+      "toEnd": "arrow",
+      "color": "4",
+      "label": "cites"
+    },
+    {
+      "id": "7a3329ba34f4d926",
+      "fromNode": "dd5750b075c2f947",
+      "fromSide": "right",
+      "fromEnd": "none",
+      "toNode": "1ab1eb2c5ec91a02",
+      "toSide": "left",
+      "toEnd": "arrow",
+      "color": "4",
+      "label": "published_in"
+    },
+    {
+      "id": "f46d118f3488fe95",
+      "fromNode": "dd5750b075c2f947",
+      "fromSide": "right",
+      "fromEnd": "none",
+      "toNode": "532e07700bd9b50e",
+      "toSide": "left",
+      "toEnd": "arrow",
+      "color": "4",
+      "label": "authored_by"
+    },
+    {
+      "id": "fcf8b8834d4b8648",
+      "fromNode": "dd5750b075c2f947",
+      "fromSide": "top",
+      "fromEnd": "none",
+      "toNode": "d24a507ca15718ab",
+      "toSide": "bottom",
+      "toEnd": "arrow",
+      "color": "4",
+      "label": "cites"
+    },
+    {
+      "id": "047a8609f948156f",
+      "fromNode": "dd5750b075c2f947",
+      "fromSide": "right",
+      "fromEnd": "none",
+      "toNode": "8f6a305d2eda9b64",
+      "toSide": "left",
+      "toEnd": "arrow",
+      "color": "4",
+      "label": "authored_by"
+    },
+    {
+      "id": "595cf802eac7ac63",
+      "fromNode": "dd5750b075c2f947",
+      "fromSide": "bottom",
+      "fromEnd": "none",
+      "toNode": "5dd64acfa3363b0f",
+      "toSide": "top",
+      "toEnd": "arrow",
+      "color": "4",
+      "label": "cites"
+    },
+    {
+      "id": "2bdd080670d98691",
+      "fromNode": "dd5750b075c2f947",
+      "fromSide": "left",
+      "fromEnd": "none",
+      "toNode": "65a3b459bd7d64c7",
+      "toSide": "right",
+      "toEnd": "arrow",
+      "color": "4",
+      "label": "cites"
+    },
+    {
+      "id": "205da85c631cd9e9",
+      "fromNode": "dd5750b075c2f947",
+      "fromSide": "top",
+      "fromEnd": "none",
+      "toNode": "d7c3548334ad43d8",
+      "toSide": "bottom",
+      "toEnd": "arrow",
+      "color": "4",
+      "label": "authored_by"
+    },
+    {
+      "id": "40e422516a001b50",
+      "fromNode": "dd5750b075c2f947",
+      "fromSide": "left",
+      "fromEnd": "none",
+      "toNode": "df9ea413696c9cf2",
+      "toSide": "right",
+      "toEnd": "arrow",
+      "color": "4",
+      "label": "method,proposes"
+    }
+  ]
+}

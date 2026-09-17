@@ -1,0 +1,9 @@
+.env
+.venv/
+rag_storage/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.log
+lightrag.log

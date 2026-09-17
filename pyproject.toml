@@ -1,0 +1,40 @@
+[project]
+name = "graph-rag"
+version = "0.1.0"
+description = "Unified Graph-RAG System: LightRAG dual-level retrieval + LitGraph bibliographic nodes + Obsidian JSON Canvas export"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "lightrag-hku>=1.5.7,<1.6",
+    "openai>=2,<4",
+    "networkx>=3.2",
+    "scipy>=1.11",
+    "nano-vectordb>=0.0.4",
+    "numpy>=1.24",
+    "python-dotenv>=1.0",
+    "json-repair>=0.30",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.6",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["."]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+exclude = [".venv", "rag_storage", "output"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
