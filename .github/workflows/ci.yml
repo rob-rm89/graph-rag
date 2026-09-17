@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.12", "3.13"]
+        exclude:
+          - os: windows-latest
+            python: "3.12"
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python }}
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Format check (ruff)
+        run: uv run ruff format --check .
+
+      - name: Lint (ruff)
+        run: uv run ruff check .
+
+      # The suite is fully offline; route any accidental network use to a dead
+      # port so it fails fast instead of depending on external services.
+      - name: Test
+        run: uv run pytest -q
+        env:
+          HTTP_PROXY: "http://127.0.0.1:9"
+          HTTPS_PROXY: "http://127.0.0.1:9"
+          NO_PROXY: "localhost,127.0.0.1"
+
+      - name: Offline demo pipeline
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
+        env:
+          HTTP_PROXY: "http://127.0.0.1:9"
+          HTTPS_PROXY: "http://127.0.0.1:9"
+          NO_PROXY: "localhost,127.0.0.1"
+        run: |
+          uv run python main.py --backend stub --log-level WARNING all --out output/ci.canvas
+          uv run python verify_integrity.py output/ci.canvas
+
+      - name: Upload demo canvas
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
+        uses: actions/upload-artifact@v4
+        with:
+          name: knowledge-graph-canvas
+          path: output/ci.canvas
+          if-no-files-found: error

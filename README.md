@@ -1,5 +1,7 @@
 # Unified Graph-RAG System
 
+[![CI](https://github.com/rob-rm89/graph-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/rob-rm89/graph-rag/actions/workflows/ci.yml)
+
 A modular Python pipeline that bridges semantic text retrieval with visual knowledge mapping:
 
 * **Ingestion** (`ingestion.py`) indexes academic text into a persistent local
@@ -155,7 +157,11 @@ uv run python verify_integrity.py output/knowledge_graph.canvas
 ```
 
 The integration test constructs a *real* LightRAG instance with the stub backend, ingests
-the sample paper, queries in both modes, exports the canvas and verifies it. The live
+the sample paper, queries in both modes, exports the canvas and verifies it.
+
+GitHub Actions (`.github/workflows/ci.yml`) runs the format check, lint and the whole suite on
+Ubuntu (Python 3.12 and 3.13) and Windows (3.13) with outbound network blocked, then runs the
+stub demo pipeline end to end and uploads the produced `.canvas` as a build artifact. The live
 OpenAI path shares all code except the LLM/embedding adapters and has not been exercised
 against a live model in this repository.
 
