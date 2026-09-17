@@ -264,15 +264,15 @@
       "label": "entities,indexes"
     },
     {
-      "id": "c8720b49253ffc07",
+      "id": "58918d2ec36bc5ba",
       "fromNode": "4abf372c65a33792",
-      "fromSide": "left",
+      "fromSide": "right",
       "fromEnd": "none",
-      "toNode": "f3119c7df5f6b27c",
-      "toSide": "right",
+      "toNode": "df9ea413696c9cf2",
+      "toSide": "left",
       "toEnd": "arrow",
       "color": "2",
-      "label": "introduces"
+      "label": "combines,retrieval"
     },
     {
       "id": "f1ead6eed9dfd6fa",
@@ -308,12 +308,12 @@
       "label": "affiliated_with"
     },
     {
-      "id": "652c2db50303cd1e",
-      "fromNode": "f291bc520f554ee0",
-      "fromSide": "left",
+      "id": "b2f7d1230f7897f9",
+      "fromNode": "9e2943b3b745187b",
+      "fromSide": "right",
       "fromEnd": "none",
-      "toNode": "9e2943b3b745187b",
-      "toSide": "right",
+      "toNode": "f291bc520f554ee0",
+      "toSide": "left",
       "toEnd": "arrow",
       "color": "2",
       "label": "builds on"
@@ -352,6 +352,17 @@
       "label": "affiliated_with"
     },
     {
+      "id": "4926a10fb700ba59",
+      "fromNode": "f3119c7df5f6b27c",
+      "fromSide": "right",
+      "fromEnd": "none",
+      "toNode": "4abf372c65a33792",
+      "toSide": "left",
+      "toEnd": "arrow",
+      "color": "2",
+      "label": "introduces"
+    },
+    {
       "id": "22f374438add6d38",
       "fromNode": "d7c3548334ad43d8",
       "fromSide": "right",
@@ -383,17 +394,6 @@
       "toEnd": "arrow",
       "color": "4",
       "label": "affiliated_with"
-    },
-    {
-      "id": "4338144eb8bfd4fd",
-      "fromNode": "df9ea413696c9cf2",
-      "fromSide": "left",
-      "fromEnd": "none",
-      "toNode": "4abf372c65a33792",
-      "toSide": "right",
-      "toEnd": "arrow",
-      "color": "2",
-      "label": "combines,retrieval"
     },
     {
       "id": "39d2f4471047bf15",

@@ -90,6 +90,8 @@ SAMPLE_ENTITIES: dict[str, tuple[str, str]] = {
         "author",
         "Third author, affiliated with KTH Royal Institute of Technology.",
     ),
+    # Initials-only spelling: lets tests exercise author reconciliation.
+    "E. Marchetti": ("author", "Author cited by initials."),
     "EMNLP 2024": ("venue", "Conference on Empirical Methods in NLP, 2024 edition."),
     "2024": ("year", "Publication year of the paper."),
     "Politecnico di Torino": ("organization", "Italian technical university."),
@@ -298,6 +300,18 @@ SAMPLE_PROFILE: dict[str, Any] = {
 }
 
 _INPUT_TEXT_RE = re.compile(r"---Input Text---(.*?)---Output---", re.DOTALL)
+# "Title: ..." / "**Authors:** ..." header lines let the stub profile any document.
+_HEADER_RE = re.compile(
+    r"^\**(Title|Authors|Year|Venue|DOI|Affiliations|References)\**:\**"
+    r"[ \t]*(.+?)[ \t]*$",
+    re.MULTILINE,
+)
+
+
+def _split_list(value: str | None, separator: str) -> list[str]:
+    if not value:
+        return []
+    return [part.strip() for part in value.split(separator) if part.strip()]
 
 
 # --------------------------------------------------------------------------- #
@@ -405,6 +419,23 @@ class StubLLM:
     def _profile(prompt: str) -> str:
         if SAMPLE_TITLE.lower() in prompt.lower():
             return json.dumps(SAMPLE_PROFILE)
+        fields = {
+            match.group(1).lower(): match.group(2).strip()
+            for match in _HEADER_RE.finditer(prompt)
+        }
+        if "title" in fields:
+            year = fields.get("year", "")
+            return json.dumps(
+                {
+                    "title": fields["title"],
+                    "authors": _split_list(fields.get("authors"), ","),
+                    "year": int(year) if year.isdigit() else None,
+                    "venue": fields.get("venue"),
+                    "doi": fields.get("doi"),
+                    "affiliations": _split_list(fields.get("affiliations"), ","),
+                    "references": _split_list(fields.get("references"), ";"),
+                }
+            )
         title = next(
             (
                 line.strip().lstrip("#").strip()

@@ -267,6 +267,33 @@ def shelf_pack(components: list[list[Box]], gap: float) -> list[Box]:
     return placed
 
 
+def _leads(description: str, name: str) -> bool:
+    """True when ``description`` opens with ``name`` as its grammatical subject."""
+    return description.startswith(f"'{name}'") or description.startswith(f"{name} ")
+
+
+def orient_edge(
+    u: str, v: str, type_u: str | None, type_v: str | None, description: Any
+) -> bool:
+    """Return True when the edge should be drawn from ``v`` to ``u``.
+
+    NetworkX graphs are undirected, so a deterministic direction is derived in
+    order of preference from: the relationship description naming exactly one
+    endpoint as its subject (``"'A' cites 'B'"`` -> A to B), the paper-first
+    rule for bibliographic edges, and finally alphabetical order.  The result
+    never depends on storage iteration order.
+    """
+    first = next(iter(split_field(description)), "")
+    u_leads, v_leads = _leads(first, u), _leads(first, v)
+    if u_leads != v_leads:
+        return v_leads
+    paper_u = normalize_type(type_u) == "paper"
+    paper_v = normalize_type(type_v) == "paper"
+    if paper_u != paper_v:
+        return paper_v
+    return u > v
+
+
 # --------------------------------------------------------------------------- #
 # Graph loading
 # --------------------------------------------------------------------------- #
@@ -525,14 +552,18 @@ class CanvasExporter:
                 node["color"] = color
             nodes.append(node)
 
-        edges: list[dict[str, Any]] = []
-        for u, v, attrs in sorted(graph.edges(data=True), key=lambda t: (t[0], t[1])):
+        # Orient first, then sort on the canonical pair so the output never
+        # depends on the order in which storage yielded the undirected edges.
+        oriented: list[tuple[str, str, Any, Any, dict[str, Any]]] = []
+        for u, v, attrs in graph.edges(data=True):
             type_u = graph.nodes[u].get("entity_type")
             type_v = graph.nodes[v].get("entity_type")
-            # Bibliographic edges point away from the paper.
-            if normalize_type(type_v) == "paper" and normalize_type(type_u) != "paper":
-                u, v = v, u
-                type_u, type_v = type_v, type_u
+            if orient_edge(u, v, type_u, type_v, attrs.get("description")):
+                u, v, type_u, type_v = v, u, type_v, type_u
+            oriented.append((u, v, type_u, type_v, attrs))
+
+        edges: list[dict[str, Any]] = []
+        for u, v, type_u, type_v, attrs in sorted(oriented, key=lambda t: (t[0], t[1])):
             from_side, to_side = self._sides(boxes[u], boxes[v])
             edge: dict[str, Any] = {
                 "id": make_canvas_id(f"edge:{u}->{v}", taken),

@@ -80,6 +80,11 @@ class Settings:
     cosine_threshold: float = field(
         default_factory=lambda: float(_env("COSINE_THRESHOLD", "0.2"))
     )
+    reconcile_graph: bool = field(
+        default_factory=lambda: (
+            _env("RECONCILE_GRAPH", "1").lower() in {"1", "true", "yes"}
+        )
+    )
     workspace: str = ""
 
     def with_overrides(self, **overrides: object) -> Settings:

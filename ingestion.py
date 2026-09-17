@@ -39,6 +39,7 @@ from config import (
 )
 from llm import LLMFunc, complete_json, make_llm_func
 from rag_factory import rag_session
+from reconciliation import REGISTRY_FILENAME, EntityRegistry, MergePlan, Reconciler
 
 # --------------------------------------------------------------------------- #
 # Profiling prompt
@@ -193,13 +194,22 @@ def _header_text(record: BibliographicRecord) -> str:
 
 
 def record_to_custom_kg(
-    record: BibliographicRecord, *, source_alias: str, file_path: str
+    record: BibliographicRecord,
+    *,
+    source_alias: str,
+    file_path: str,
+    existing_entities: frozenset[str] = frozenset(),
 ) -> dict[str, list[dict[str, Any]]]:
     """Translate a record into LightRAG's ``ainsert_custom_kg`` payload.
 
     Pure function.  Entity types are emitted already normalised (lower-case,
     no spaces) to match what LightRAG's extraction pipeline stores, so later
     merges never split the type vote.  Never emits self-loops or duplicates.
+
+    Names in ``existing_entities`` already exist in the graph (resolved by the
+    reconciler): they receive relationships but no entity row, because the
+    custom-KG path overwrites node attributes.  The paper itself is always
+    written since its own profile is authoritative.
     """
     paper = record.title.strip()
     entities: list[dict[str, Any]] = []
@@ -212,6 +222,8 @@ def record_to_custom_kg(
         if not clean or clean in seen_entities:
             return clean
         seen_entities.add(clean)
+        if clean in existing_entities and clean != paper:
+            return clean
         entities.append(
             {
                 "entity_name": clean,
@@ -356,21 +368,47 @@ def read_document(path: Path) -> str:
 
 
 @dataclass
+class IngestResult:
+    doc_id: str
+    record: BibliographicRecord
+    merges: list[MergePlan] = field(default_factory=list)
+    linked_papers: list[str] = field(default_factory=list)
+
+
+@dataclass
 class IngestionReport:
     ingested: list[str] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
     profiles: dict[str, BibliographicRecord] = field(default_factory=dict)
+    merges: list[MergePlan] = field(default_factory=list)
+    linked_papers: dict[str, list[str]] = field(default_factory=dict)
 
 
 class IngestionEngine:
-    """Drive profiling + LightRAG indexing for every document in ``data_dir``."""
+    """Drive profiling, reconciliation and LightRAG indexing for ``data_dir``."""
 
-    def __init__(self, rag: LightRAG, settings: Settings, profiling_llm: LLMFunc):
+    def __init__(
+        self,
+        rag: LightRAG,
+        settings: Settings,
+        profiling_llm: LLMFunc,
+        *,
+        reconcile_graph: bool | None = None,
+    ):
         self._rag = rag
         self._settings = settings
         self._llm = profiling_llm
         self._ledger_path = settings.working_dir / LEDGER_FILENAME
         self._ledger: dict[str, dict[str, Any]] = self._load_ledger()
+        self._registry = EntityRegistry(settings.working_dir / REGISTRY_FILENAME)
+        self._reconciler = Reconciler(self._registry)
+        self._reconcile_after_ingest = (
+            settings.reconcile_graph if reconcile_graph is None else reconcile_graph
+        )
+
+    @property
+    def registry(self) -> EntityRegistry:
+        return self._registry
 
     # -- discovery ---------------------------------------------------------- #
 
@@ -410,34 +448,45 @@ class IngestionEngine:
 
     # -- ingestion ---------------------------------------------------------- #
 
-    async def ingest_text(
-        self, text: str, name: str
-    ) -> tuple[str, BibliographicRecord]:
+    async def ingest_text(self, text: str, name: str) -> IngestResult:
         doc_id = compute_mdhash_id(text.strip(), prefix="doc-")
         cached = self._ledger.get(doc_id)
+        merges: list[MergePlan] = []
+        linked: list[str] = []
         if cached:
             record = BibliographicRecord.from_dict(cached)
             logger.info("Bibliographic nodes for %s already present; skipping", name)
         else:
-            record = await self.profile_document(text, name)
+            profile = await self.profile_document(text, name)
+            reconciliation = self._reconciler.reconcile(profile, doc_id)
+            record = reconciliation.record
+            linked = reconciliation.linked_papers
             custom_kg = record_to_custom_kg(
-                record, source_alias=f"{doc_id}-biblio", file_path=name
+                record,
+                source_alias=f"{doc_id}-biblio",
+                file_path=name,
+                existing_entities=reconciliation.existing,
             )
             logger.info(
-                "Appending %d bibliographic entities and %d relationships for %s",
+                "Appending %d bibliographic entities and %d relationships for %s "
+                "(%d resolved to existing nodes, %d cross-paper citations)",
                 len(custom_kg["entities"]),
                 len(custom_kg["relationships"]),
                 name,
+                len(reconciliation.existing),
+                len(linked),
             )
             await self._rag.ainsert_custom_kg(custom_kg, full_doc_id=doc_id)
+            merges = await self._apply_merges(reconciliation.merges)
+            self._registry.save()
             self._ledger[doc_id] = record.to_dict()
             self._save_ledger()
 
         logger.info("Indexing %s through LightRAG (doc_id=%s)", name, doc_id)
         await self._rag.ainsert(text, ids=[doc_id], file_paths=[name])
-        return doc_id, record
+        return IngestResult(doc_id, record, merges, linked)
 
-    async def ingest_document(self, path: Path) -> tuple[str, BibliographicRecord]:
+    async def ingest_document(self, path: Path) -> IngestResult:
         text = read_document(path)
         return await self.ingest_text(text, path.name)
 
@@ -445,19 +494,72 @@ class IngestionEngine:
         report = IngestionReport()
         for path in self.discover_documents():
             try:
-                doc_id, record = await self.ingest_document(path)
+                result = await self.ingest_document(path)
             except ValueError as exc:
                 logger.warning("Skipping %s: %s", path.name, exc)
                 report.skipped.append(path.name)
                 continue
             report.ingested.append(path.name)
-            report.profiles[doc_id] = record
+            report.profiles[result.doc_id] = result.record
+            report.merges.extend(result.merges)
+            if result.linked_papers:
+                report.linked_papers[result.record.title] = result.linked_papers
+        if self._reconcile_after_ingest and report.ingested:
+            report.merges.extend(await self.reconcile_graph())
         logger.info(
-            "Ingestion finished: %d ingested, %d skipped",
+            "Ingestion finished: %d ingested, %d skipped, %d entity merge(s)",
             len(report.ingested),
             len(report.skipped),
+            len(report.merges),
         )
         return report
+
+    # -- reconciliation ----------------------------------------------------- #
+
+    async def _apply_merges(self, plans: list[MergePlan]) -> list[MergePlan]:
+        """Execute merge plans through LightRAG, skipping stale or missing nodes."""
+        storage = self._rag.chunk_entity_relation_graph
+        applied: list[MergePlan] = []
+        for plan in plans:
+            sources = [
+                source
+                for source in plan.sources
+                if source != plan.target and await storage.has_node(source)
+            ]
+            if not sources:
+                continue
+            if not await storage.has_node(plan.target):
+                logger.warning(
+                    "Merge target %r is not in the graph; leaving %s unmerged",
+                    plan.target,
+                    sources,
+                )
+                continue
+            try:
+                await self._rag.amerge_entities(sources, plan.target)
+            except Exception as exc:  # noqa: BLE001 - a failed merge must not abort ingest
+                logger.error("Merging %s into %r failed: %s", sources, plan.target, exc)
+                continue
+            logger.info("Merged %s into %r (%s)", sources, plan.target, plan.reason)
+            applied.append(MergePlan(tuple(sources), plan.target, plan.reason))
+        return applied
+
+    async def reconcile_graph(self) -> list[MergePlan]:
+        """Merge near-duplicate nodes already in the graph (graph-wide pass)."""
+        storage = self._rag.chunk_entity_relation_graph
+        nodes = await storage.get_all_nodes()
+        kinds = {
+            str(node["id"]): normalize_type(node.get("entity_type"))
+            for node in nodes
+            if node.get("id")
+        }
+        plans = self._reconciler.plan_graph_merges(nodes)
+        applied = await self._apply_merges(plans)
+        for plan in applied:
+            self._reconciler.absorb_merge(plan, kind=kinds.get(plan.target))
+        self._registry.save()
+        logger.info("Graph reconciliation applied %d merge(s)", len(applied))
+        return applied
 
     # -- ledger ------------------------------------------------------------- #
 

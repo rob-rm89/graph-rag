@@ -30,6 +30,7 @@ from ingestion import IngestionEngine
 from llm import LLMFunc, make_llm_func
 from query import DEMO_QUESTIONS, QueryInterface, format_result
 from rag_factory import rag_session
+from reconciliation import MergePlan
 from verify_integrity import load_canvas, verify_canvas
 
 BACKEND_OPENAI = "openai"
@@ -62,6 +63,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     export = sub.add_parser("export", help="Export the knowledge graph to JSON Canvas")
     _add_export_args(export)
+
+    sub.add_parser(
+        "reconcile", help="Merge near-duplicate entities already in the graph"
+    )
 
     everything = sub.add_parser("all", help="ingest -> query -> export in one run")
     everything.add_argument(
@@ -121,6 +126,22 @@ async def run_ingest(rag: LightRAG, settings: Settings, profiling_llm: LLMFunc) 
             f"  {doc_id}: {record.title!r} ({record.year}) "
             f"authors={len(record.authors)}"
         )
+    for title, targets in report.linked_papers.items():
+        print(f"  {title!r} cites ingested paper(s): {targets}")
+    print_merges(report.merges)
+
+
+def print_merges(merges: list[MergePlan]) -> None:
+    print(f"Entity merges applied: {len(merges)}")
+    for plan in merges:
+        print(f"  {', '.join(plan.sources)} -> {plan.target} ({plan.reason})")
+
+
+async def run_reconcile(
+    rag: LightRAG, settings: Settings, profiling_llm: LLMFunc
+) -> None:
+    engine = IngestionEngine(rag, settings, profiling_llm)
+    print_merges(await engine.reconcile_graph())
 
 
 async def run_query(rag: LightRAG, questions: list[str], mode: str) -> None:
@@ -166,6 +187,8 @@ async def run(args: argparse.Namespace) -> int:
     async with rag_session(settings, **rag_kwargs) as rag:
         if command in ("ingest", "all"):
             await run_ingest(rag, settings, profiling_llm)
+        if command == "reconcile":
+            await run_reconcile(rag, settings, profiling_llm)
         if command in ("query", "all"):
             questions = args.question or list(DEMO_QUESTIONS)
             await run_query(rag, questions, args.mode)

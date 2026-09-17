@@ -229,3 +229,34 @@ def test_exported_canvas_is_landscape() -> None:
     xs = [n["x"] + n["width"] for n in canvas["nodes"]]
     ys = [n["y"] + n["height"] for n in canvas["nodes"]]
     assert max(xs) >= max(ys)
+
+
+def test_orient_edge_rules() -> None:
+    from canvas_exporter import orient_edge
+
+    # Description names the subject: citing paper -> cited paper, either order given.
+    desc = "'Paper B' cites 'Paper A'."
+    assert orient_edge("Paper A", "Paper B", "paper", "paper", desc) is True
+    assert orient_edge("Paper B", "Paper A", "paper", "paper", desc) is False
+    unquoted = "Elena Marchetti is listed with affiliation KTH on 'Paper A'."
+    assert orient_edge("KTH", "Elena Marchetti", "organization", "author", unquoted)
+    # Paper-first when the description is uninformative.
+    assert orient_edge("Author", "Paper", "author", "paper", "merged summary") is True
+    assert orient_edge("Paper", "Author", "paper", "author", None) is False
+    # Alphabetical fallback for semantic edges.
+    assert orient_edge("Zeta", "Alpha", "concept", "method", "") is True
+    assert orient_edge("Alpha", "Zeta", "concept", "method", "") is False
+
+
+def test_export_independent_of_edge_insertion_order(tmp_path: Path) -> None:
+    forward = synthetic_graph(n=60, isolated=0)
+    reversed_graph = nx.Graph()
+    reversed_graph.add_nodes_from(reversed(list(forward.nodes(data=True))))
+    reversed_graph.add_edges_from(
+        (v, u, d) for u, v, d in reversed(list(forward.edges(data=True)))
+    )
+    first = CanvasExporter(forward).export(tmp_path / "f.canvas").read_text("utf-8")
+    second = (
+        CanvasExporter(reversed_graph).export(tmp_path / "r.canvas").read_text("utf-8")
+    )
+    assert first == second

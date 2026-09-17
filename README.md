@@ -87,6 +87,31 @@ Extraction is steered twice ("dual pass"):
    through `LightRAG.ainsert_custom_kg()` **before** the standard `ainsert()`, so the
    bibliographic nodes are guaranteed to exist and are then enriched by extraction.
 
+## Entity reconciliation and cross-paper citation linking
+
+LightRAG merges graph nodes only on exact name equality, so `reconciliation.py` keeps a
+persistent registry (`<WORKING_DIR>/litgraph_registry.json`) of canonical names and resolves
+every profiled record against it before anything is written:
+
+* **Authors**: `"E. Marchetti"`, `"Marchetti, Elena"` and `"Elena Marchetti"` resolve to one
+  node; when a fuller spelling arrives later the old node is merged into it. Initials that
+  match several known authors (`"J. Smith"` vs. Jane and John) are deliberately left apart.
+* **Works**: titles are matched by DOI, by normalised text, then fuzzily. A reference to an
+  already ingested paper links straight to that paper's node (`cites` edge) instead of
+  creating a `CitedWork` twin, and a paper ingested after being cited upgrades its
+  `CitedWork` node to a `Paper`.
+* **Venues / organisations** collapse on normalised names.
+* Entities the registry already knows receive relationships only, so an existing node's
+  description is never overwritten by a later document.
+
+After each ingest run a graph-wide pass also merges near-duplicates produced by LightRAG's
+own extraction (via `LightRAG.amerge_entities`, which redirects edges and updates the vector
+store). Disable it with `RECONCILE_GRAPH=0`, or run it on demand:
+
+```bash
+uv run python main.py reconcile
+```
+
 ## JSON Canvas output
 
 * Every LightRAG entity becomes a `text` node with a Markdown body
