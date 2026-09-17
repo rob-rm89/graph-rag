@@ -22,14 +22,18 @@ from typing import Any
 
 from lightrag import LightRAG
 from lightrag.utils import compute_mdhash_id, logger, setup_logger
+from pypdf import PdfReader
+from pypdf.errors import PyPdfError
 
 from config import (
+    PDF_SUFFIX,
     REL_AFFILIATED_WITH,
     REL_AUTHORED_BY,
     REL_CITES,
     REL_PUBLISHED_IN,
     REL_PUBLISHED_YEAR,
     SUPPORTED_SUFFIXES,
+    TEXT_SUFFIXES,
     Settings,
     normalize_type,
 )
@@ -290,6 +294,63 @@ def record_to_custom_kg(
 
 
 # --------------------------------------------------------------------------- #
+# Document loading
+# --------------------------------------------------------------------------- #
+
+_HYPHEN_BREAK_RE = re.compile(r"(\w)-\n(\w)")
+_MULTI_BLANK_RE = re.compile(r"\n{3,}")
+
+
+def normalise_pdf_text(text: str) -> str:
+    """Repair end-of-line hyphenation and collapse runs of blank lines."""
+    text = _HYPHEN_BREAK_RE.sub(r"\1\2", text)
+    return _MULTI_BLANK_RE.sub("\n\n", text).strip()
+
+
+def extract_pdf_text(path: Path) -> str:
+    """Extract text from every page of a PDF (pages joined by blank lines).
+
+    Raises ``ValueError`` for unreadable or password-protected files.  Scanned
+    PDFs without a text layer yield an empty string and are rejected by
+    :func:`read_document`.
+    """
+    try:
+        reader = PdfReader(str(path))
+        if reader.is_encrypted:
+            reader.decrypt("")  # owner-password-only PDFs open with an empty password
+        pages = [page.extract_text() or "" for page in reader.pages]
+    except (PyPdfError, OSError, ValueError) as exc:
+        raise ValueError(f"cannot read PDF {path.name}: {exc}") from exc
+    text = normalise_pdf_text(
+        "\n\n".join(page.strip() for page in pages if page.strip())
+    )
+    logger.info(
+        "Extracted %d characters from %d PDF page(s) in %s",
+        len(text),
+        len(pages),
+        path.name,
+    )
+    return text
+
+
+def read_document(path: Path) -> str:
+    """Return the plain text of a supported document (``.txt``, ``.md``, ``.pdf``).
+
+    Raises ``ValueError`` for unsupported types and for files without text.
+    """
+    suffix = path.suffix.lower()
+    if suffix == PDF_SUFFIX:
+        text = extract_pdf_text(path)
+    elif suffix in TEXT_SUFFIXES:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    else:
+        raise ValueError(f"unsupported file type {suffix!r}: {path.name}")
+    if not text.strip():
+        raise ValueError(f"{path.name} contains no extractable text")
+    return text
+
+
+# --------------------------------------------------------------------------- #
 # Engine
 # --------------------------------------------------------------------------- #
 
@@ -377,9 +438,7 @@ class IngestionEngine:
         return doc_id, record
 
     async def ingest_document(self, path: Path) -> tuple[str, BibliographicRecord]:
-        text = path.read_text(encoding="utf-8", errors="replace")
-        if not text.strip():
-            raise ValueError(f"{path} is empty")
+        text = read_document(path)
         return await self.ingest_text(text, path.name)
 
     async def ingest_all(self) -> IngestionReport:

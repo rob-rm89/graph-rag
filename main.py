@@ -53,7 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser(
-        "ingest", help="Profile and index every .txt/.md in the data directory"
+        "ingest", help="Profile and index every .txt/.md/.pdf in the data directory"
     )
 
     query = sub.add_parser("query", help="Ask questions in hybrid and/or mix mode")

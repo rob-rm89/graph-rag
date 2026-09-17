@@ -14,6 +14,9 @@ A modular Python pipeline that bridges semantic text retrieval with visual knowl
   Obsidian-compatible **JSON Canvas 1.0** file.
 * **Verification** (`verify_integrity.py`) is a standalone checker for the exported canvas.
 
+Input documents may be plain text (`.txt`, `.md`) or PDF (`.pdf`, text layer extracted with
+pypdf; scanned PDFs without a text layer are skipped with a warning).
+
 Storage backends are explicit and local: `NetworkXStorage` (graph), `NanoVectorDBStorage`
 (vectors), `JsonKVStorage` and `JsonDocStatusStorage` (key/value and document status).
 
@@ -30,7 +33,7 @@ Storage backends are explicit and local: `NetworkXStorage` (graph), `NanoVectorD
 | `verify_integrity.py` | Canvas integrity CLI (exit code 0/1) |
 | `offline_backend.py` | Deterministic stub LLM, hashing embeddings and codepoint tokenizer for key-free runs |
 | `main.py` | CLI orchestrator: `ingest`, `query`, `export`, `all` |
-| `data/` | Input corpus (`.txt` / `.md`); ships with a synthetic sample paper |
+| `data/` | Input corpus (`.txt`, `.md`, `.pdf` via pypdf); ships with a synthetic sample paper |
 | `output/` | Exported `knowledge_graph.canvas` |
 | `tests/` | Unit tests plus an offline end-to-end integration test |
 

@@ -27,7 +27,9 @@ load_dotenv(override=False)
 # Runtime settings
 # --------------------------------------------------------------------------- #
 
-SUPPORTED_SUFFIXES: frozenset[str] = frozenset({".txt", ".md"})
+TEXT_SUFFIXES: frozenset[str] = frozenset({".txt", ".md"})
+PDF_SUFFIX = ".pdf"
+SUPPORTED_SUFFIXES: frozenset[str] = TEXT_SUFFIXES | {PDF_SUFFIX}
 
 
 def _env(name: str, default: str) -> str:
