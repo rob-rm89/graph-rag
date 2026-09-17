@@ -27,7 +27,9 @@ Storage backends are explicit and local: `NetworkXStorage` (graph), `NanoVectorD
 | `config.py` | `Settings` (from `.env`), LitGraph entity-type registry, extraction-prompt guidance, canvas colour presets |
 | `llm.py` | OpenAI-compatible LLM/embedding adapters; routes extraction to `gpt-4o-mini` and answers to `gpt-4o` via LightRAG role configs |
 | `rag_factory.py` | `build_rag()` / `rag_session()`: explicit storages, `initialize_storages()` + `initialize_pipeline_status()` |
-| `ingestion.py` | Profiling prompt -> `BibliographicRecord` -> `ainsert_custom_kg` -> `ainsert` |
+| `ingestion.py` | Profiling prompt -> `BibliographicRecord` -> catalogue enrichment -> reconciliation -> `ainsert_custom_kg` -> `ainsert` |
+| `metadata_lookup.py` | OpenAlex/Crossref lookup with candidate scoring, reference resolution and on-disk cache |
+| `reconciliation.py` | Canonical entity registry, author/title/DOI matching, cross-paper citation linking, graph-wide merge planning |
 | `query.py` | `QueryInterface.hybrid()`, `.mix()`, `.retrieve()`, `.compare_modes()` |
 | `canvas_exporter.py` | `CanvasExporter`: layout, overlap removal, JSON Canvas serialisation |
 | `verify_integrity.py` | Canvas integrity CLI (exit code 0/1) |
@@ -111,6 +113,25 @@ store). Disable it with `RECONCILE_GRAPH=0`, or run it on demand:
 ```bash
 uv run python main.py reconcile
 ```
+
+## Catalogue grounding (OpenAlex / Crossref)
+
+`metadata_lookup.py` checks every profiled record against **OpenAlex** first and **Crossref**
+as a fallback: by DOI when the document states one, otherwise by title search where
+candidates are accepted only if title, publication year (+/-1) and author family names agree
+(catalogues return reprints and homonymous titles). On a hit the record gains the canonical
+title, the full author list, year, venue, per-author institutions and the catalogue's
+reference list with DOIs (in-text references are kept first, catalogue references are appended
+up to `METADATA_MAX_REFERENCES`). DOIs feed straight into the reconciler, so cross-paper
+citation links become exact rather than fuzzy.
+
+* Lookups never fail ingestion: network errors and misses degrade to the LLM profile.
+* Hits *and* misses are cached in `<WORKING_DIR>/metadata_cache.json`.
+* No contact address is sent unless `METADATA_MAILTO` is set (polite pools give higher rate
+  limits).
+* `main.py` enables lookups automatically for the `openai` backend (`METADATA_LOOKUP=0`
+  disables) and keeps the `stub` backend offline; force either way with
+  `--metadata-lookup on|off`.
 
 ## JSON Canvas output
 

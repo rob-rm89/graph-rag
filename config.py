@@ -85,6 +85,18 @@ class Settings:
             _env("RECONCILE_GRAPH", "1").lower() in {"1", "true", "yes"}
         )
     )
+    # OpenAlex / Crossref enrichment of profiled bibliographic metadata.
+    metadata_lookup: bool = field(
+        default_factory=lambda: (
+            _env("METADATA_LOOKUP", "1").lower() in {"1", "true", "yes"}
+        )
+    )
+    metadata_mailto: str | None = field(
+        default_factory=lambda: _env_optional("METADATA_MAILTO")
+    )
+    metadata_max_references: int = field(
+        default_factory=lambda: int(_env("METADATA_MAX_REFERENCES", "40"))
+    )
     workspace: str = ""
 
     def with_overrides(self, **overrides: object) -> Settings:

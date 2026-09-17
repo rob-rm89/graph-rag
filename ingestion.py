@@ -38,6 +38,7 @@ from config import (
     normalize_type,
 )
 from llm import LLMFunc, complete_json, make_llm_func
+from metadata_lookup import MetadataResolver
 from rag_factory import rag_session
 from reconciliation import REGISTRY_FILENAME, EntityRegistry, MergePlan, Reconciler
 
@@ -96,6 +97,11 @@ class BibliographicRecord:
     doi: str | None = None
     affiliations: list[str] = field(default_factory=list)
     references: list[str] = field(default_factory=list)
+    # Optional precision data, typically filled by metadata_lookup.
+    author_affiliations: dict[str, list[str]] = field(default_factory=dict)
+    reference_dois: dict[str, str] = field(default_factory=dict)
+    openalex_id: str | None = None
+    metadata_source: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -110,6 +116,15 @@ class BibliographicRecord:
             doi=data.get("doi"),
             affiliations=list(data.get("affiliations") or []),
             references=list(data.get("references") or []),
+            author_affiliations={
+                str(author): list(institutions)
+                for author, institutions in (
+                    data.get("author_affiliations") or {}
+                ).items()
+            },
+            reference_dois=dict(data.get("reference_dois") or {}),
+            openalex_id=data.get("openalex_id"),
+            metadata_source=data.get("metadata_source"),
         )
 
 
@@ -186,10 +201,14 @@ def _header_text(record: BibliographicRecord) -> str:
         lines.append(f"Year: {record.year}")
     if record.doi:
         lines.append(f"DOI: {record.doi}")
+    if record.openalex_id:
+        lines.append(f"OpenAlex: {record.openalex_id}")
     if record.affiliations:
         lines.append(f"Affiliations: {', '.join(record.affiliations)}")
     if record.references:
         lines.append("References: " + "; ".join(record.references))
+    if record.metadata_source:
+        lines.append(f"Metadata source: {record.metadata_source}")
     return "\n".join(lines)
 
 
@@ -281,20 +300,44 @@ def record_to_custom_kg(
         cited = add_entity(reference, "CitedWork", f"Work cited by '{paper}'.")
         add_relation(paper, cited, REL_CITES, f"'{paper}' cites '{cited}'.")
 
-    for affiliation in record.affiliations:
-        org = add_entity(
-            affiliation, "Organization", f"Institution affiliated with '{paper}'."
-        )
-        # Without per-author affiliation data, attach the institution to the
-        # paper's authors collectively (one edge per author keeps the graph honest
-        # about what the profiler actually knows).
-        for author in record.authors:
-            add_relation(
-                _clean_str(author),
-                org,
-                REL_AFFILIATED_WITH,
-                f"{author} is listed with affiliation {org} on '{paper}'.",
-            )
+    org_desc = f"Institution affiliated with '{paper}'."
+    if record.author_affiliations:
+        # Authoritative per-author institutions (from OpenAlex/Crossref).
+        attributed: set[str] = set()
+        for author, institutions in record.author_affiliations.items():
+            name = _clean_str(author)
+            for institution in institutions:
+                org = add_entity(institution, "Organization", org_desc)
+                if org:
+                    attributed.add(org)
+                add_relation(
+                    name,
+                    org,
+                    REL_AFFILIATED_WITH,
+                    f"{name} is affiliated with {org} on '{paper}'.",
+                )
+        for affiliation in record.affiliations:
+            org = add_entity(affiliation, "Organization", org_desc)
+            if org and org not in attributed:
+                add_relation(
+                    paper,
+                    org,
+                    REL_AFFILIATED_WITH,
+                    f"'{paper}' lists the affiliation {org}.",
+                )
+    else:
+        for affiliation in record.affiliations:
+            org = add_entity(affiliation, "Organization", org_desc)
+            # Without per-author affiliation data, attach the institution to the
+            # paper's authors collectively (one edge per author keeps the graph
+            # honest about what the profiler actually knows).
+            for author in record.authors:
+                add_relation(
+                    _clean_str(author),
+                    org,
+                    REL_AFFILIATED_WITH,
+                    f"{author} is listed with affiliation {org} on '{paper}'.",
+                )
 
     chunk = {
         "content": _header_text(record),
@@ -394,10 +437,12 @@ class IngestionEngine:
         profiling_llm: LLMFunc,
         *,
         reconcile_graph: bool | None = None,
+        metadata_resolver: MetadataResolver | None = None,
     ):
         self._rag = rag
         self._settings = settings
         self._llm = profiling_llm
+        self._resolver = metadata_resolver
         self._ledger_path = settings.working_dir / LEDGER_FILENAME
         self._ledger: dict[str, dict[str, Any]] = self._load_ledger()
         self._registry = EntityRegistry(settings.working_dir / REGISTRY_FILENAME)
@@ -458,6 +503,8 @@ class IngestionEngine:
             logger.info("Bibliographic nodes for %s already present; skipping", name)
         else:
             profile = await self.profile_document(text, name)
+            if self._resolver is not None:
+                profile = await self._resolver.enrich(profile)
             reconciliation = self._reconciler.reconcile(profile, doc_id)
             record = reconciliation.record
             linked = reconciliation.linked_papers
@@ -590,11 +637,21 @@ class IngestionEngine:
 async def main() -> None:
     setup_logger("lightrag", level="INFO", enable_file_logging=False)
     settings = Settings()
-    async with rag_session(settings) as rag:
-        engine = IngestionEngine(
-            rag, settings, make_llm_func(settings.extract_model, settings)
-        )
-        report = await engine.ingest_all()
+    resolver = (
+        MetadataResolver.from_settings(settings) if settings.metadata_lookup else None
+    )
+    try:
+        async with rag_session(settings) as rag:
+            engine = IngestionEngine(
+                rag,
+                settings,
+                make_llm_func(settings.extract_model, settings),
+                metadata_resolver=resolver,
+            )
+            report = await engine.ingest_all()
+    finally:
+        if resolver is not None:
+            await resolver.aclose()
     for name in report.ingested:
         logger.info("Ingested %s", name)
 

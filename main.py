@@ -28,6 +28,7 @@ from canvas_exporter import (
 from config import Settings
 from ingestion import IngestionEngine
 from llm import LLMFunc, make_llm_func
+from metadata_lookup import MetadataResolver
 from query import DEMO_QUESTIONS, QueryInterface, format_result
 from rag_factory import rag_session
 from reconciliation import MergePlan
@@ -50,6 +51,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--working-dir", type=Path, default=None)
     parser.add_argument("--data-dir", type=Path, default=None)
     parser.add_argument("--log-level", default="INFO")
+    parser.add_argument(
+        "--metadata-lookup",
+        choices=("auto", "on", "off"),
+        default="auto",
+        help=(
+            "OpenAlex/Crossref enrichment of profiled metadata. auto = on for the "
+            "openai backend when METADATA_LOOKUP=1, off for the stub backend"
+        ),
+    )
 
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -117,14 +127,20 @@ def resolve_backend(backend: str, settings: Settings) -> tuple[dict[str, Any], L
     return {}, make_llm_func(settings.extract_model, settings)
 
 
-async def run_ingest(rag: LightRAG, settings: Settings, profiling_llm: LLMFunc) -> None:
-    engine = IngestionEngine(rag, settings, profiling_llm)
+async def run_ingest(
+    rag: LightRAG,
+    settings: Settings,
+    profiling_llm: LLMFunc,
+    resolver: MetadataResolver | None = None,
+) -> None:
+    engine = IngestionEngine(rag, settings, profiling_llm, metadata_resolver=resolver)
     report = await engine.ingest_all()
     print(f"Ingested {len(report.ingested)} document(s); skipped {len(report.skipped)}")
     for doc_id, record in report.profiles.items():
         print(
             f"  {doc_id}: {record.title!r} ({record.year}) "
-            f"authors={len(record.authors)}"
+            f"authors={len(record.authors)} refs={len(record.references)} "
+            f"metadata={record.metadata_source or 'llm'}"
         )
     for title, targets in report.linked_papers.items():
         print(f"  {title!r} cites ingested paper(s): {targets}")
@@ -184,22 +200,34 @@ async def run(args: argparse.Namespace) -> int:
     settings = resolve_settings(args)
     rag_kwargs, profiling_llm = resolve_backend(args.backend, settings)
     command = args.command
-    async with rag_session(settings, **rag_kwargs) as rag:
-        if command in ("ingest", "all"):
-            await run_ingest(rag, settings, profiling_llm)
-        if command == "reconcile":
-            await run_reconcile(rag, settings, profiling_llm)
-        if command in ("query", "all"):
-            questions = args.question or list(DEMO_QUESTIONS)
-            await run_query(rag, questions, args.mode)
-        if command in ("export", "all"):
-            await run_export(
-                rag,
-                settings,
-                max_nodes=args.max_nodes,
-                algorithm=args.algorithm,
-                verify=not args.no_verify,
-            )
+    lookup_enabled = args.metadata_lookup == "on" or (
+        args.metadata_lookup == "auto"
+        and args.backend == BACKEND_OPENAI
+        and settings.metadata_lookup
+    )
+    resolver = MetadataResolver.from_settings(settings) if lookup_enabled else None
+    if resolver is not None:
+        logger.info("External metadata lookup enabled (OpenAlex, then Crossref)")
+    try:
+        async with rag_session(settings, **rag_kwargs) as rag:
+            if command in ("ingest", "all"):
+                await run_ingest(rag, settings, profiling_llm, resolver)
+            if command == "reconcile":
+                await run_reconcile(rag, settings, profiling_llm)
+            if command in ("query", "all"):
+                questions = args.question or list(DEMO_QUESTIONS)
+                await run_query(rag, questions, args.mode)
+            if command in ("export", "all"):
+                await run_export(
+                    rag,
+                    settings,
+                    max_nodes=args.max_nodes,
+                    algorithm=args.algorithm,
+                    verify=not args.no_verify,
+                )
+    finally:
+        if resolver is not None:
+            await resolver.aclose()
     return 0
 
 

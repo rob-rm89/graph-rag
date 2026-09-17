@@ -639,6 +639,7 @@ name = "graph-rag"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "httpx" },
     { name = "json-repair" },
     { name = "lightrag-hku" },
     { name = "nano-vectordb" },
@@ -659,6 +660,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "json-repair", specifier = ">=0.30" },
     { name = "lightrag-hku", specifier = ">=1.5.7,<1.6" },
     { name = "nano-vectordb", specifier = ">=0.0.4" },

@@ -475,19 +475,43 @@ class Reconciler:
             ]
         )
 
+        # Per-author institutions: remap both keys (authors) and values
+        # (organisations) to their canonical names.
+        author_affiliations: dict[str, list[str]] = {}
+        for author, institutions in record.author_affiliations.items():
+            resolved = reg.resolve_person(author)
+            canonical_author = resolved.name if resolved else author
+            names = [
+                self._reconcile_named(KIND_ORGANIZATION, org, doc_id, existing)
+                for org in institutions
+            ]
+            merged = author_affiliations.setdefault(canonical_author, [])
+            merged.extend(name for name in names if name)
+            author_affiliations[canonical_author] = _dedupe(merged)
+
         references: list[str] = []
+        reference_dois: dict[str, str] = {}
         for reference in record.references:
-            entry = reg.resolve_work(reference)
+            doi = record.reference_dois.get(reference)
+            entry = reg.resolve_work(reference, doi=doi)
             if entry is None:
-                reg.register(reference, KIND_CITEDWORK, doi=reference, doc=doc_id)
+                reg.register(
+                    reference, KIND_CITEDWORK, doi=doi or reference, doc=doc_id
+                )
                 references.append(reference)
                 new_cited.append(reference)
+                if doi:
+                    reference_dois[reference] = doi
                 continue
             if entry.name == title:
                 continue  # a reference to the document itself
             reg.add_alias(entry, reference, doc=doc_id)
+            if doi and not entry.doi:
+                reg.register(entry.name, entry.kind, doi=doi)
             references.append(entry.name)
             existing.add(entry.name)
+            if entry.doi:
+                reference_dois[entry.name] = entry.doi
             if entry.kind == KIND_PAPER:
                 linked.append(entry.name)
         references = _dedupe(references)
@@ -499,6 +523,8 @@ class Reconciler:
             venue=venue,
             affiliations=affiliations,
             references=references,
+            reference_dois=reference_dois,
+            author_affiliations=author_affiliations,
         )
         if linked:
             logger.info("Cross-paper citations from %r -> %s", title, linked)
