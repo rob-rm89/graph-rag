@@ -105,6 +105,12 @@ every profiled record against it before anything is written:
   creating a `CitedWork` twin, and a paper ingested after being cited upgrades its
   `CitedWork` node to a `Paper`.
 * **Venues / organisations** collapse on normalised names.
+* **External identifiers are decisive.** OpenAlex author and institution IDs, ORCIDs, ROR IDs
+  (from the catalogue lookup) and DOIs are stored in the registry. A shared identifier merges
+  two spellings with certainty; distinct identifiers never merge, however similar the names.
+  A second "John Smith" with a different identifier gets a qualified node such as
+  `John Smith (Other University)`, and two similarly titled works with different DOIs stay
+  apart. Identifiers are also written into node descriptions for provenance.
 * Entities the registry already knows receive relationships only, so an existing node's
   description is never overwritten by a later document.
 

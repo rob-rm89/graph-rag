@@ -100,6 +100,10 @@ class BibliographicRecord:
     # Optional precision data, typically filled by metadata_lookup.
     author_affiliations: dict[str, list[str]] = field(default_factory=dict)
     reference_dois: dict[str, str] = field(default_factory=dict)
+    # External identifiers ("openalex:A..", "orcid:..", "openalex:I..", "ror:..")
+    # keyed by author / institution name.
+    author_ids: dict[str, list[str]] = field(default_factory=dict)
+    institution_ids: dict[str, list[str]] = field(default_factory=dict)
     openalex_id: str | None = None
     metadata_source: str | None = None
 
@@ -123,6 +127,14 @@ class BibliographicRecord:
                 ).items()
             },
             reference_dois=dict(data.get("reference_dois") or {}),
+            author_ids={
+                str(name): list(ids)
+                for name, ids in (data.get("author_ids") or {}).items()
+            },
+            institution_ids={
+                str(name): list(ids)
+                for name, ids in (data.get("institution_ids") or {}).items()
+            },
             openalex_id=data.get("openalex_id"),
             metadata_source=data.get("metadata_source"),
         )
@@ -280,8 +292,15 @@ def record_to_custom_kg(
     paper_desc += "."
     add_entity(paper, "Paper", paper_desc)
 
+    def with_ids(description: str, ids: list[str] | None) -> str:
+        return f"{description} Identifiers: {', '.join(ids)}." if ids else description
+
     for author in record.authors:
-        name = add_entity(author, "Author", f"Author of '{paper}'.")
+        name = add_entity(
+            author,
+            "Author",
+            with_ids(f"Author of '{paper}'.", record.author_ids.get(author)),
+        )
         add_relation(paper, name, REL_AUTHORED_BY, f"'{paper}' was authored by {name}.")
 
     if record.venue:
@@ -300,14 +319,20 @@ def record_to_custom_kg(
         cited = add_entity(reference, "CitedWork", f"Work cited by '{paper}'.")
         add_relation(paper, cited, REL_CITES, f"'{paper}' cites '{cited}'.")
 
-    org_desc = f"Institution affiliated with '{paper}'."
+    def add_organization(institution: str | None) -> str | None:
+        description = with_ids(
+            f"Institution affiliated with '{paper}'.",
+            record.institution_ids.get(institution or ""),
+        )
+        return add_entity(institution, "Organization", description)
+
     if record.author_affiliations:
         # Authoritative per-author institutions (from OpenAlex/Crossref).
         attributed: set[str] = set()
         for author, institutions in record.author_affiliations.items():
             name = _clean_str(author)
             for institution in institutions:
-                org = add_entity(institution, "Organization", org_desc)
+                org = add_organization(institution)
                 if org:
                     attributed.add(org)
                 add_relation(
@@ -317,7 +342,7 @@ def record_to_custom_kg(
                     f"{name} is affiliated with {org} on '{paper}'.",
                 )
         for affiliation in record.affiliations:
-            org = add_entity(affiliation, "Organization", org_desc)
+            org = add_organization(affiliation)
             if org and org not in attributed:
                 add_relation(
                     paper,
@@ -327,7 +352,7 @@ def record_to_custom_kg(
                 )
     else:
         for affiliation in record.affiliations:
-            org = add_entity(affiliation, "Organization", org_desc)
+            org = add_organization(affiliation)
             # Without per-author affiliation data, attach the institution to the
             # paper's authors collectively (one edge per author keeps the graph
             # honest about what the profiler actually knows).

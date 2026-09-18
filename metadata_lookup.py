@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -81,6 +82,10 @@ class ExternalWork:
     venue: str | None = None
     authors: list[str] = field(default_factory=list)
     author_affiliations: dict[str, list[str]] = field(default_factory=dict)
+    # External identifiers per author / institution name, e.g.
+    # {"John Smith": ["openalex:A123", "orcid:0000-..."]}.
+    author_ids: dict[str, list[str]] = field(default_factory=dict)
+    institution_ids: dict[str, list[str]] = field(default_factory=dict)
     references: list[ExternalReference] = field(default_factory=list)
     reference_ids: list[str] = field(default_factory=list)
     matched_by: str = "title"  # "doi" or "title"
@@ -132,6 +137,38 @@ def short_openalex_id(value: Any) -> str:
     return str(value or "").rsplit("/", 1)[-1]
 
 
+_ORCID_RE = re.compile(r"(\d{4}-\d{4}-\d{4}-\d{3}[\dX])", re.IGNORECASE)
+_OPENALEX_ID_RE = re.compile(r"^[AIWSPF]\d+$")
+
+
+def openalex_identifier(value: Any) -> str | None:
+    """``https://openalex.org/A123`` -> ``openalex:A123``."""
+    short = short_openalex_id(value)
+    return f"openalex:{short}" if _OPENALEX_ID_RE.match(short) else None
+
+
+def orcid_identifier(value: Any) -> str | None:
+    """Any ORCID URL or bare id -> ``orcid:0000-0002-1825-0097``."""
+    match = _ORCID_RE.search(str(value or ""))
+    return f"orcid:{match.group(1).upper()}" if match else None
+
+
+def ror_identifier(value: Any) -> str | None:
+    """``https://ror.org/00f54p054`` -> ``ror:00f54p054``."""
+    text = str(value or "").strip().rstrip("/")
+    return f"ror:{text.rsplit('/', 1)[-1]}" if text else None
+
+
+def _add_identifiers(
+    store: dict[str, list[str]], name: str, ids: list[str | None]
+) -> None:
+    for identifier in ids:
+        if identifier:
+            store.setdefault(name, [])
+            if identifier not in store[name]:
+                store[name].append(identifier)
+
+
 # --------------------------------------------------------------------------- #
 # Parsers
 # --------------------------------------------------------------------------- #
@@ -140,6 +177,8 @@ def short_openalex_id(value: Any) -> str:
 def parse_openalex_work(data: dict[str, Any], matched_by: str) -> ExternalWork:
     authors: list[str] = []
     affiliations: dict[str, list[str]] = {}
+    author_ids: dict[str, list[str]] = {}
+    institution_ids: dict[str, list[str]] = {}
     for authorship in data.get("authorships") or []:
         author = authorship.get("author") or {}
         name = _clean(author.get("display_name")) or _clean(
@@ -149,15 +188,26 @@ def parse_openalex_work(data: dict[str, Any], matched_by: str) -> ExternalWork:
             continue
         if name not in authors:
             authors.append(name)
-        institutions = [
-            _clean(inst.get("display_name"))
-            for inst in authorship.get("institutions") or []
-        ]
-        for institution in institutions:
-            if institution:
-                affiliations.setdefault(name, [])
-                if institution not in affiliations[name]:
-                    affiliations[name].append(institution)
+        _add_identifiers(
+            author_ids,
+            name,
+            [
+                openalex_identifier(author.get("id")),
+                orcid_identifier(author.get("orcid")),
+            ],
+        )
+        for inst in authorship.get("institutions") or []:
+            institution = _clean(inst.get("display_name"))
+            if not institution:
+                continue
+            affiliations.setdefault(name, [])
+            if institution not in affiliations[name]:
+                affiliations[name].append(institution)
+            _add_identifiers(
+                institution_ids,
+                institution,
+                [openalex_identifier(inst.get("id")), ror_identifier(inst.get("ror"))],
+            )
     location = data.get("primary_location") or {}
     source = (location.get("source") or {}).get("display_name")
     return ExternalWork(
@@ -169,6 +219,8 @@ def parse_openalex_work(data: dict[str, Any], matched_by: str) -> ExternalWork:
         venue=_clean(source),
         authors=authors,
         author_affiliations=affiliations,
+        author_ids=author_ids,
+        institution_ids=institution_ids,
         reference_ids=[
             short_openalex_id(ref) for ref in data.get("referenced_works") or []
         ],
@@ -179,6 +231,7 @@ def parse_openalex_work(data: dict[str, Any], matched_by: str) -> ExternalWork:
 def parse_crossref_work(message: dict[str, Any], matched_by: str) -> ExternalWork:
     authors: list[str] = []
     affiliations: dict[str, list[str]] = {}
+    author_ids: dict[str, list[str]] = {}
     for author in message.get("author") or []:
         name = _clean(
             " ".join(
@@ -189,6 +242,7 @@ def parse_crossref_work(message: dict[str, Any], matched_by: str) -> ExternalWor
             continue
         if name not in authors:
             authors.append(name)
+        _add_identifiers(author_ids, name, [orcid_identifier(author.get("ORCID"))])
         for affiliation in author.get("affiliation") or []:
             institution = _clean(affiliation.get("name"))
             if institution:
@@ -228,6 +282,7 @@ def parse_crossref_work(message: dict[str, Any], matched_by: str) -> ExternalWor
         venue=_clean(_first(message.get("container-title"))),
         authors=authors,
         author_affiliations=affiliations,
+        author_ids=author_ids,
         references=references,
         matched_by=matched_by,
     )
@@ -449,6 +504,8 @@ def enrich_record(
         references=references,
         reference_dois=reference_dois,
         author_affiliations=author_affiliations,
+        author_ids={name: list(ids) for name, ids in work.author_ids.items()},
+        institution_ids={name: list(ids) for name, ids in work.institution_ids.items()},
         openalex_id=work.id if work.source == SOURCE_OPENALEX else record.openalex_id,
         metadata_source=work.source,
     )

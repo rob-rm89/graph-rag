@@ -24,6 +24,7 @@ import json
 import re
 import unicodedata
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -49,6 +50,7 @@ CONTAINMENT_MIN_CHARS = 25
 
 _DOI_RE = re.compile(r"(10\.\d{4,9}/[^\s\"'<>]+)", re.IGNORECASE)
 _YEAR_PAREN_RE = re.compile(r"\(\s*(?:1[5-9]|20)\d{2}[a-z]?\s*\)")
+_TRAILING_QUALIFIER_RE = re.compile(r"\s*\([^()]*\)\s*$")
 _NON_ALNUM_RE = re.compile(r"[^0-9a-z]+")
 _PARTICLES = frozenset(
     {
@@ -141,10 +143,12 @@ class PersonName:
 def parse_person(name: Any) -> PersonName | None:
     """Split a personal name into given tokens and a normalised family name.
 
-    Handles ``"Family, Given"``, glued initials (``"E.M."``) and common
-    surname particles (``"van der Berg"``).
+    Handles ``"Family, Given"``, glued initials (``"E.M."``), common surname
+    particles (``"van der Berg"``) and a trailing disambiguation qualifier
+    (``"John Smith (Other University)"``).
     """
     text = unicodedata.normalize("NFKC", str(name or "")).strip()
+    text = _TRAILING_QUALIFIER_RE.sub("", text).strip() or text
     if not text:
         return None
     if "," in text:
@@ -197,6 +201,8 @@ class RegistryEntry:
     doi: str | None = None
     aliases: list[str] = field(default_factory=list)
     docs: list[str] = field(default_factory=list)
+    # External identifiers such as "openalex:A123", "orcid:0000-...", "ror:...".
+    ids: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -205,6 +211,7 @@ class RegistryEntry:
             "doi": self.doi,
             "aliases": self.aliases,
             "docs": self.docs,
+            "ids": self.ids,
         }
 
     @classmethod
@@ -215,6 +222,48 @@ class RegistryEntry:
             doi=data.get("doi"),
             aliases=list(data.get("aliases") or []),
             docs=list(data.get("docs") or []),
+            ids=list(data.get("ids") or []),
+        )
+
+
+def identity_conflict(known: Iterable[str], given: Iterable[str]) -> bool:
+    """True when both sides carry identifiers and none agree (distinct entities)."""
+    known_set, given_set = set(known), set(given)
+    return bool(known_set) and bool(given_set) and known_set.isdisjoint(given_set)
+
+
+class IdentityUnionFind:
+    """Union-find that refuses to bridge clusters with conflicting identifiers."""
+
+    def __init__(self, names: Iterable[str], identity: dict[str, Iterable[str]]):
+        self._parent = {name: name for name in names}
+        self._ids = {name: set(identity.get(name, ())) for name in self._parent}
+
+    def find(self, name: str) -> str:
+        while self._parent[name] != name:
+            self._parent[name] = self._parent[self._parent[name]]
+            name = self._parent[name]
+        return name
+
+    def compatible(self, a: str, b: str) -> bool:
+        return not identity_conflict(self._ids[self.find(a)], self._ids[self.find(b)])
+
+    def union(self, a: str, b: str) -> bool:
+        root_a, root_b = self.find(a), self.find(b)
+        if root_a == root_b:
+            return True
+        if not self.compatible(root_a, root_b):
+            return False
+        self._parent[root_b] = root_a
+        self._ids[root_a] |= self._ids[root_b]
+        return True
+
+    def clusters(self) -> list[list[str]]:
+        grouped: dict[str, list[str]] = defaultdict(list)
+        for name in self._parent:
+            grouped[self.find(name)].append(name)
+        return sorted(
+            (sorted(members) for members in grouped.values()), key=lambda m: m[0]
         )
 
 
@@ -260,6 +309,7 @@ class EntityRegistry:
 
     def _reindex(self) -> None:
         self._by_doi: dict[str, RegistryEntry] = {}
+        self._by_id: dict[str, RegistryEntry] = {}
         self._work_by_norm: dict[str, RegistryEntry] = {}
         self._work_buckets: dict[str, list[tuple[str, RegistryEntry]]] = defaultdict(
             list
@@ -269,6 +319,8 @@ class EntityRegistry:
         for entry in self._entries.values():
             if entry.doi:
                 self._by_doi[entry.doi] = entry
+            for identifier in entry.ids:
+                self._by_id.setdefault(identifier, entry)
             if entry.kind in WORK_KINDS:
                 for label in (entry.name, *entry.aliases):
                     norm = normalize_title(label)
@@ -319,12 +371,40 @@ class EntityRegistry:
                     best = (score, entry)
         return best[1] if best else None
 
-    def resolve_person(self, name: Any) -> RegistryEntry | None:
-        """Find an author by exact normalised name or by unique compatible initials."""
+    def resolve_by_id(
+        self, kind: str, ids: Iterable[str] | None
+    ) -> RegistryEntry | None:
+        """Exact identity match on an external identifier of the given kind."""
+        for identifier in ids or ():
+            entry = self._by_id.get(identifier)
+            if entry is not None and entry.kind == kind:
+                return entry
+        return None
+
+    def resolve_person(
+        self, name: Any, ids: Iterable[str] | None = None
+    ) -> RegistryEntry | None:
+        """Find an author by external identifier, exact normalised name, or
+        unique compatible initials.
+
+        A shared identifier is decisive regardless of spelling.  Candidates that
+        carry identifiers disjoint from the given ones are different people and
+        are never matched by name.
+        """
+        given_ids = [identifier for identifier in ids or () if identifier]
+        by_id = self.resolve_by_id(KIND_AUTHOR, given_ids)
+        if by_id is not None:
+            return by_id
         person = parse_person(name)
         if person is None or not person.family:
             return None
-        candidates = self._people_by_family.get(person.family, [])
+        candidates = [
+            entry
+            for entry in self._people_by_family.get(person.family, [])
+            if not identity_conflict(entry.ids, given_ids)
+        ]
+        # Prefer an entry literally named like the query over alias matches.
+        candidates.sort(key=lambda entry: entry.name != str(name).strip())
         for entry in candidates:
             for label in (entry.name, *entry.aliases):
                 known = parse_person(label)
@@ -345,8 +425,17 @@ class EntityRegistry:
             )
         return None
 
-    def resolve_named(self, kind: str, name: Any) -> RegistryEntry | None:
-        return self._named_by_norm.get((kind, normalize_text(name)))
+    def resolve_named(
+        self, kind: str, name: Any, ids: Iterable[str] | None = None
+    ) -> RegistryEntry | None:
+        given_ids = [identifier for identifier in ids or () if identifier]
+        by_id = self.resolve_by_id(kind, given_ids)
+        if by_id is not None:
+            return by_id
+        entry = self._named_by_norm.get((kind, normalize_text(name)))
+        if entry is not None and identity_conflict(entry.ids, given_ids):
+            return None
+        return entry
 
     # -- mutations ---------------------------------------------------------- #
 
@@ -357,6 +446,7 @@ class EntityRegistry:
         *,
         doi: Any = None,
         doc: str | None = None,
+        ids: Iterable[str] | None = None,
     ) -> RegistryEntry:
         entry = self._entries.get(name)
         if entry is None:
@@ -366,16 +456,26 @@ class EntityRegistry:
             entry.doi = normalize_doi(doi)
         if doc and doc not in entry.docs:
             entry.docs.append(doc)
+        for identifier in ids or ():
+            if identifier and identifier not in entry.ids:
+                entry.ids.append(identifier)
         self._reindex()
         return entry
 
     def add_alias(
-        self, entry: RegistryEntry, alias: str, doc: str | None = None
+        self,
+        entry: RegistryEntry,
+        alias: str,
+        doc: str | None = None,
+        ids: Iterable[str] | None = None,
     ) -> None:
         if alias != entry.name and alias not in entry.aliases:
             entry.aliases.append(alias)
         if doc and doc not in entry.docs:
             entry.docs.append(doc)
+        for identifier in ids or ():
+            if identifier and identifier not in entry.ids:
+                entry.ids.append(identifier)
         self._reindex()
 
     def set_kind(self, name: str, kind: str) -> None:
@@ -407,6 +507,9 @@ class EntityRegistry:
             for doc in src.docs:
                 if doc not in dst.docs:
                     dst.docs.append(doc)
+            for identifier in src.ids:
+                if identifier not in dst.ids:
+                    dst.ids.append(identifier)
         elif source != dst.name and source not in dst.aliases:
             dst.aliases.append(source)
         self._reindex()
@@ -462,32 +565,49 @@ class Reconciler:
         new_cited: list[str] = []
 
         title = self._reconcile_title(record, doc_id, merges)
-        authors = self._reconcile_authors(record.authors, doc_id, merges, existing)
+        authors, author_map = self._reconcile_authors(record, doc_id, merges, existing)
         venue = self._reconcile_named(KIND_VENUE, record.venue, doc_id, existing)
-        affiliations = _dedupe(
-            [
-                name
-                for name in (
-                    self._reconcile_named(KIND_ORGANIZATION, org, doc_id, existing)
-                    for org in record.affiliations
-                )
-                if name
-            ]
-        )
+
+        def canonical_org(org: str) -> str | None:
+            return self._reconcile_named(
+                KIND_ORGANIZATION,
+                org,
+                doc_id,
+                existing,
+                ids=record.institution_ids.get(org),
+            )
+
+        org_map = {org: canonical_org(org) for org in record.affiliations}
+        affiliations = _dedupe([name for name in org_map.values() if name])
 
         # Per-author institutions: remap both keys (authors) and values
         # (organisations) to their canonical names.
         author_affiliations: dict[str, list[str]] = {}
         for author, institutions in record.author_affiliations.items():
-            resolved = reg.resolve_person(author)
-            canonical_author = resolved.name if resolved else author
+            canonical_author = author_map.get(author)
+            if canonical_author is None:
+                resolved = reg.resolve_person(author, ids=record.author_ids.get(author))
+                canonical_author = resolved.name if resolved else author
             names = [
-                self._reconcile_named(KIND_ORGANIZATION, org, doc_id, existing)
+                org_map[org] if org in org_map else canonical_org(org)
                 for org in institutions
             ]
             merged = author_affiliations.setdefault(canonical_author, [])
             merged.extend(name for name in names if name)
             author_affiliations[canonical_author] = _dedupe(merged)
+
+        author_ids: dict[str, list[str]] = {}
+        for author, ids in record.author_ids.items():
+            canonical_author = author_map.get(author, author)
+            author_ids[canonical_author] = _dedupe(
+                author_ids.get(canonical_author, []) + ids
+            )
+        institution_ids: dict[str, list[str]] = {}
+        for org, ids in record.institution_ids.items():
+            canonical = org_map.get(org) or canonical_org(org) or org
+            institution_ids[canonical] = _dedupe(
+                institution_ids.get(canonical, []) + ids
+            )
 
         references: list[str] = []
         reference_dois: dict[str, str] = {}
@@ -525,6 +645,8 @@ class Reconciler:
             references=references,
             reference_dois=reference_dois,
             author_affiliations=author_affiliations,
+            author_ids=author_ids,
+            institution_ids=institution_ids,
         )
         if linked:
             logger.info("Cross-paper citations from %r -> %s", title, linked)
@@ -572,47 +694,116 @@ class Reconciler:
 
     def _reconcile_authors(
         self,
-        authors: list[str],
+        record: BibliographicRecord,
         doc_id: str,
         merges: list[MergePlan],
         existing: set[str],
-    ) -> list[str]:
+    ) -> tuple[list[str], dict[str, str]]:
+        """Return canonical author names and the original -> canonical mapping."""
         reg = self.registry
         canonical: list[str] = []
-        for author in authors:
+        mapping: dict[str, str] = {}
+        for author in record.authors:
+            ids = list(record.author_ids.get(author) or [])
             person = parse_person(author)
-            entry = reg.resolve_person(author)
+            entry = reg.resolve_person(author, ids=ids)
             if entry is None or person is None:
-                reg.register(author, KIND_AUTHOR, doc=doc_id)
-                canonical.append(author)
+                name = author
+                taken = reg.get(author)
+                if taken is not None and (
+                    taken.kind != KIND_AUTHOR or identity_conflict(taken.ids, ids)
+                ):
+                    # Same spelling, different identifiers: a distinct person.
+                    name = self._disambiguate(author, record, ids)
+                    logger.warning(
+                        "Author %r (%s) differs from existing %r; recorded as %r",
+                        author,
+                        ", ".join(ids),
+                        taken.name,
+                        name,
+                    )
+                reg.register(name, KIND_AUTHOR, doc=doc_id, ids=ids)
+                canonical.append(name)
+                mapping[author] = name
                 continue
             known = parse_person(entry.name)
-            if known is not None and person.completeness > known.completeness:
+            rename_blocked = author in reg and reg.get(author) is not entry
+            if (
+                known is not None
+                and person.completeness > known.completeness
+                and not rename_blocked
+            ):
                 # The new spelling is more complete: it becomes the node, the old
                 # node is merged into it once the new node exists.
                 merges.append(MergePlan((entry.name,), author, "author name completed"))
                 reg.merge_into(entry.name, author, kind=KIND_AUTHOR)
-                reg.register(author, KIND_AUTHOR, doc=doc_id)
+                reg.register(author, KIND_AUTHOR, doc=doc_id, ids=ids)
                 canonical.append(author)
+                mapping[author] = author
                 logger.info("Author %r completed to %r", entry.name, author)
             else:
-                reg.add_alias(entry, author, doc=doc_id)
+                reg.add_alias(entry, author, doc=doc_id, ids=ids)
                 canonical.append(entry.name)
+                mapping[author] = entry.name
                 existing.add(entry.name)
-        return _dedupe(canonical)
+        return _dedupe(canonical), mapping
+
+    def _disambiguate(
+        self, name: str, record: BibliographicRecord, ids: list[str]
+    ) -> str:
+        """Qualify a homonym with its institution, else its identifier."""
+        institutions = record.author_affiliations.get(name) or []
+        qualifier = institutions[0] if institutions else None
+        if not qualifier and ids:
+            qualifier = ids[0].split(":", 1)[-1]
+        candidate = f"{name} ({qualifier})" if qualifier else f"{name} (2)"
+        counter = 2
+        while candidate in self.registry:
+            counter += 1
+            candidate = f"{name} ({qualifier or ''}{' ' if qualifier else ''}{counter})"
+        return candidate
 
     def _reconcile_named(
-        self, kind: str, name: str | None, doc_id: str, existing: set[str]
+        self,
+        kind: str,
+        name: str | None,
+        doc_id: str,
+        existing: set[str],
+        ids: Iterable[str] | None = None,
     ) -> str | None:
         if not name:
             return None
-        entry = self.registry.resolve_named(kind, name)
+        given_ids = [identifier for identifier in ids or () if identifier]
+        entry = self.registry.resolve_named(kind, name, ids=given_ids)
         if entry is None:
-            self.registry.register(name, kind, doc=doc_id)
-            return name
-        self.registry.add_alias(entry, name, doc=doc_id)
+            canonical = name
+            taken = self.registry.get(name)
+            if taken is not None and (
+                taken.kind != kind or identity_conflict(taken.ids, given_ids)
+            ):
+                qualifier = given_ids[0].split(":", 1)[-1] if given_ids else "2"
+                canonical = f"{name} ({qualifier})"
+                logger.warning(
+                    "%s %r differs from existing entry; recorded as %r",
+                    kind,
+                    name,
+                    canonical,
+                )
+            self.registry.register(canonical, kind, doc=doc_id, ids=given_ids)
+            return canonical
+        self.registry.add_alias(entry, name, doc=doc_id, ids=given_ids)
         existing.add(entry.name)
         return entry.name
+
+    def _identity(self, name: str) -> frozenset[str]:
+        """Identifiers the registry knows for a graph node name (DOI for works)."""
+        entry = self.registry.get(name)
+        if entry is None:
+            return frozenset()
+        ids = set(entry.ids)
+        if entry.doi:
+            ids.add(f"doi:{entry.doi}")
+        return frozenset(ids)
 
     # -- graph-wide --------------------------------------------------------- #
 
@@ -644,38 +835,39 @@ class Reconciler:
         pool = canonical or names
         return sorted(pool, key=lambda n: (-len(n), n))[0]
 
+    def _union_shared_identifiers(
+        self, uf: IdentityUnionFind, names: list[str]
+    ) -> None:
+        """Names that share any external identifier denote the same entity."""
+        by_id: dict[str, list[str]] = defaultdict(list)
+        for name in names:
+            for identifier in self._identity(name):
+                by_id[identifier].append(name)
+        for members in by_id.values():
+            for other in members[1:]:
+                uf.union(members[0], other)
+
     def _plan_work_merges(self, works: list[tuple[str, str]]) -> list[MergePlan]:
-        parent: dict[str, str] = {name: name for name, _ in works}
+        names = sorted(name for name, _ in works)
+        uf = IdentityUnionFind(names, {name: self._identity(name) for name in names})
+        self._union_shared_identifiers(uf, names)
 
-        def find(x: str) -> str:
-            while parent[x] != x:
-                parent[x] = parent[parent[x]]
-                x = parent[x]
-            return x
-
-        def union(a: str, b: str) -> None:
-            ra, rb = find(a), find(b)
-            if ra != rb:
-                parent[rb] = ra
-
-        norms = {name: normalize_title(name) for name, _ in works}
+        norms = {name: normalize_title(name) for name in names}
         buckets: dict[str, list[str]] = defaultdict(list)
         for name, norm in norms.items():
             if norm:
                 buckets[norm.split(" ", 1)[0]].append(name)
         for members in buckets.values():
-            members.sort()
             for i, a in enumerate(members):
                 for b in members[i + 1 :]:
-                    if titles_match(norms[a], norms[b]):
-                        union(a, b)
+                    if titles_match(norms[a], norms[b]) and not uf.union(a, b):
+                        logger.info(
+                            "Works %r and %r look alike but have distinct DOIs", a, b
+                        )
 
-        clusters: dict[str, list[str]] = defaultdict(list)
-        for name, _ in works:
-            clusters[find(name)].append(name)
         kinds = dict(works)
         plans: list[MergePlan] = []
-        for members in sorted(clusters.values(), key=lambda m: sorted(m)[0]):
+        for members in uf.clusters():
             if len(members) < 2:
                 continue
             papers = [m for m in members if kinds[m] == KIND_PAPER]
@@ -685,61 +877,78 @@ class Reconciler:
         return plans
 
     def _plan_author_merges(self, names: list[str]) -> list[MergePlan]:
+        names = sorted(names)
         parsed = {name: parse_person(name) for name in names}
+        uf = IdentityUnionFind(names, {name: self._identity(name) for name in names})
+        # 1. Shared identifiers are decisive, whatever the spelling.
+        self._union_shared_identifiers(uf, names)
+
+        # 2. Name heuristics, never across distinct identifiers.
         by_family: dict[str, list[str]] = defaultdict(list)
         for name, person in parsed.items():
             if person and person.family:
                 by_family[person.family].append(name)
-
-        plans: list[MergePlan] = []
         for family in sorted(by_family):
-            members = sorted(by_family[family])
-            full_clusters: dict[str, list[str]] = defaultdict(list)
-            partial: list[str] = []
-            for name in members:
-                person = parsed[name]
-                assert person is not None
-                if person.completeness > 0:
-                    full_clusters[person.key].append(name)
-                else:
-                    partial.append(name)
-            partial_clusters: dict[str, list[str]] = defaultdict(list)
+            members = by_family[family]
+            full = [n for n in members if parsed[n].completeness > 0]  # type: ignore[union-attr]
+            partial = [n for n in members if parsed[n].completeness == 0]  # type: ignore[union-attr]
+            for i, a in enumerate(full):
+                for b in full[i + 1 :]:
+                    if parsed[a].key == parsed[b].key:  # type: ignore[union-attr]
+                        uf.union(a, b)
             for name in partial:
                 person = parsed[name]
                 assert person is not None
-                compatible = [
-                    key
-                    for key, cluster in full_clusters.items()
-                    if persons_compatible(person, parsed[cluster[0]])  # type: ignore[arg-type]
-                ]
-                if len(compatible) == 1:
-                    full_clusters[compatible[0]].append(name)
-                elif not compatible:
-                    partial_clusters[person.initials_key].append(name)
+                roots = {
+                    uf.find(other)
+                    for other in full
+                    if persons_compatible(person, parsed[other])  # type: ignore[arg-type]
+                    and uf.compatible(name, other)
+                }
+                if len(roots) == 1:
+                    uf.union(name, next(iter(roots)))
+                elif not roots:
+                    for other in partial:
+                        if (
+                            other != name
+                            and parsed[other].initials_key == person.initials_key  # type: ignore[union-attr]
+                        ):
+                            uf.union(name, other)
                 else:
                     logger.info("Author %r ambiguous in graph; left unmerged", name)
-            for cluster in [*full_clusters.values(), *partial_clusters.values()]:
-                if len(cluster) < 2:
-                    continue
-                canonical = [n for n in cluster if n in self.registry]
-                pool = canonical or cluster
-                target = sorted(
-                    pool,
-                    key=lambda n: (-parsed[n].completeness, -len(n), n),  # type: ignore[union-attr]
-                )[0]
-                sources = tuple(sorted(n for n in cluster if n != target))
-                plans.append(MergePlan(sources, target, "duplicate author names"))
+
+        plans: list[MergePlan] = []
+        for cluster in uf.clusters():
+            if len(cluster) < 2:
+                continue
+            target = sorted(
+                cluster,
+                key=lambda n: (
+                    n not in self.registry,
+                    -parsed[n].completeness,  # type: ignore[union-attr]
+                    -len(n),
+                    n,
+                ),
+            )[0]
+            sources = tuple(sorted(n for n in cluster if n != target))
+            plans.append(MergePlan(sources, target, "duplicate author names"))
         return plans
 
     def _plan_named_merges(self, names: list[str], kind: str) -> list[MergePlan]:
+        names = sorted(names)
+        uf = IdentityUnionFind(names, {name: self._identity(name) for name in names})
+        self._union_shared_identifiers(uf, names)
         groups: dict[str, list[str]] = defaultdict(list)
         for name in names:
             norm = normalize_text(name)
             if norm:
                 groups[norm].append(name)
+        for members in groups.values():
+            for i, a in enumerate(members):
+                for b in members[i + 1 :]:
+                    uf.union(a, b)  # refused when identifiers conflict
         plans: list[MergePlan] = []
-        for norm in sorted(groups):
-            members = groups[norm]
+        for members in uf.clusters():
             if len(members) < 2:
                 continue
             target = self._prefer(members)
